@@ -48,7 +48,9 @@ function makeRange(sheet, r, c, nr, nc) {
     setValue: (v) => { set(r, c, v); return range; },
     setNumberFormats: (rows) => { rows.forEach((row, i) => row.forEach((f, j) => { sheet._formats[`${r + i},${c + j}`] = f; })); return range; },
     setNumberFormat: (f) => { for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) sheet._formats[`${r + i},${c + j}`] = f; return range; },
-    setDataValidation: () => range,
+    // Like real Sheets: a checkbox rule turns empty cells into FALSE, which getLastRow() then counts.
+    setDataValidation: (rule) => { if (rule && rule.checkbox) for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) if (cell(r + i, c + j) === '') set(r + i, c + j, false); return range; },
+    clearDataValidations: () => range,
     setFontWeight: () => range, setBackground: () => range,
     clearContent: () => { for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) if (g[r + i - 1]) g[r + i - 1][c + j - 1] = ''; return range; },
   };
@@ -62,7 +64,7 @@ const ss = {
   deleteSheet: (s) => { delete sheets[s.getName()]; },
   getSheets: () => Object.values(sheets),
 };
-const dv = () => { const b = {}; ['requireCheckbox', 'requireValueInList', 'setAllowInvalid', 'requireNumberBetween', 'setHelpText'].forEach(k => b[k] = () => b); b.build = () => ({}); return b; };
+const dv = () => { const b = {}; ['requireValueInList', 'setAllowInvalid', 'requireNumberBetween', 'setHelpText'].forEach((k) => (b[k] = () => b)); b.requireCheckbox = () => { b._cb = true; return b; }; b.build = () => ({ checkbox: !!b._cb }); return b; };
 const props = {};
 let uuidN = 0;
 const ctx = {
@@ -288,7 +290,35 @@ test('v1.1 bulk push: 60 new rows + 1 update use a handful of sheet writes, text
 });
 
 test('ping reports code version so the app can tell an old deployment', () => {
-  assert.strictEqual(post({ token, action: 'ping' }).codeVersion, '1.1.0');
+  assert.strictEqual(post({ token, action: 'ping' }).codeVersion, '1.2.0');
+});
+
+test('v1.2 D-07: setup moves rows written after row 1000 (v1.0/v1.1 checkbox bug) back to row 2', () => {
+  const sh = sheets.Recipes;
+  const head = sh._grid[0];
+  // old layout: checkboxes (FALSE) on 999 empty rows, real rows appended at 1001+
+  for (let r = 2; r <= 1000; r++) sh.getRange(r, head.indexOf('deleted') + 1).setValue(false);
+  const oldRow = (id, name) => head.map((h) => (h === 'id' ? id : h === 'name' ? name : h === 'servings' ? 4 : h === 'updatedAt' ? '2026-11-05T15:00:00.000Z' : h === 'deleted' ? false : ''));
+  sh.getRange(1001, 1, 3, head.length).setValues([oldRow('old-a', 'A'), oldRow('old-b', 'B'), oldRow('old-c', 'C')]);
+  const keepBefore = post({ token, action: 'pull' }).data.Recipes.length;
+  assert.strictEqual(sh.getLastRow(), 1003);
+  ctx.setup();
+  const ids = post({ token, action: 'pull' }).data.Recipes.map((r) => r.id);
+  assert.strictEqual(ids.length, keepBefore, 'no rows lost or duplicated');
+  assert.deepStrictEqual(ids.slice(-3), ['old-a', 'old-b', 'old-c']);
+  assert.strictEqual(sh.getLastRow(), 1 + keepBefore, 'rows are contiguous from row 2, no FALSE tail');
+  // the next push lands right after the data
+  post({ token, action: 'push', changes: [{ table: 'Recipes', row: { id: 'new-1', name: 'N', servings: 1, updatedAt: '2026-11-05T16:00:00.000Z' } }] });
+  assert.strictEqual(sh.getLastRow(), 2 + keepBefore);
+  assert.strictEqual(sh._grid[1 + keepBefore][head.indexOf('id')], 'new-1');
+});
+
+test('v1.2: fresh setup → first pushed row is row 2 even though deleted has checkboxes', () => {
+  const g = require('./gas-env.cjs').createGasServer();
+  g.post(JSON.stringify({ token: g.token, action: 'push', changes: [{ table: 'Ingredients', row: { id: 'x1', nameTh: 'แป้ง', updatedAt: '2026-11-05T16:00:00.000Z' } }] }));
+  assert.strictEqual(g.findRow('Ingredients', 'id', 'x1'), 2);
+  assert.strictEqual(g.sheets.Ingredients.getLastRow(), 2);
+  assert.strictEqual(g.sheets.Ingredients._grid[1][g.sheets.Ingredients._grid[0].indexOf('deleted')], false);
 });
 
 console.log(`\n${passed} tests passed`);

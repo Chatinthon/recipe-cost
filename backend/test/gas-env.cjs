@@ -48,7 +48,9 @@ function makeRange(sheet, r, c, nr, nc) {
     setValue: (v) => { set(r, c, v); return range; },
     setNumberFormats: (rows) => { rows.forEach((row, i) => row.forEach((f, j) => { sheet._formats[`${r + i},${c + j}`] = f; })); return range; },
     setNumberFormat: (f) => { for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) sheet._formats[`${r + i},${c + j}`] = f; return range; },
-    setDataValidation: () => range,
+    // Like real Sheets: a checkbox rule turns empty cells into FALSE, which getLastRow() then counts.
+    setDataValidation: (rule) => { if (rule && rule.checkbox) for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) if (cell(r + i, c + j) === '') set(r + i, c + j, false); return range; },
+    clearDataValidations: () => range,
     setFontWeight: () => range, setBackground: () => range,
     clearContent: () => { for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) if (g[r + i - 1]) g[r + i - 1][c + j - 1] = ''; return range; },
   };
@@ -63,7 +65,7 @@ function createGasServer() {
     deleteSheet: (s) => { delete sheets[s.getName()]; },
     getSheets: () => Object.values(sheets),
   };
-  const dv = () => { const b = {}; ['requireCheckbox', 'requireValueInList', 'setAllowInvalid', 'requireNumberBetween', 'setHelpText'].forEach((k) => (b[k] = () => b)); b.build = () => ({}); return b; };
+  const dv = () => { const b = {}; ['requireValueInList', 'setAllowInvalid', 'requireNumberBetween', 'setHelpText'].forEach((k) => (b[k] = () => b)); b.requireCheckbox = () => { b._cb = true; return b; }; b.build = () => ({ checkbox: !!b._cb }); return b; };
   const props = {};
   let uuidN = 0;
   const ctx = {

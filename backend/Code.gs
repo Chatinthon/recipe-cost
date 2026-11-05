@@ -1,6 +1,6 @@
 /**
  * Recipe Cost & Nutrition — Google Sheet backend (Google Apps Script)
- * Version 1.1.0
+ * Version 1.2.0
  *
  * วิธีติดตั้ง: ดูคู่มือ "ตั้งค่า Google Sheet + Apps Script"
  *   1) วางโค้ดนี้ใน Extensions > Apps Script ของ Google Sheet ที่สร้างใหม่
@@ -17,7 +17,7 @@
  */
 
 const API_VERSION = 1;
-const CODE_VERSION = '1.1.0';
+const CODE_VERSION = '1.2.0';
 
 const TABLES = {
   Ingredients: ['id', 'nameTh', 'nameEn', 'category', 'baseUnit', 'packPrice', 'packSize', 'packUnit', 'buyMode',
@@ -81,6 +81,7 @@ function setup() {
       }
     }
     formatColumns_(sh, name);
+    if (SYNC_TABLES.indexOf(name) !== -1) compactTable_(sh);
   });
   // ลบชีตว่างเริ่มต้น (Sheet1 / ชีต1) ถ้าไม่มีข้อมูล
   ['Sheet1', 'ชีต1'].forEach(function (n) {
@@ -105,7 +106,7 @@ function resetToken() {
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('Recipe App')
     .addItem('แสดง token', 'showToken')
-    .addItem('ตรวจ/ซ่อมแท็บ (setup)', 'setup')
+    .addItem('ตรวจ/ซ่อมแท็บ และย้ายแถวให้ชิดกัน (setup)', 'setup')
     .addToUi();
 }
 
@@ -126,7 +127,7 @@ function formatColumns_(sh, name) {
     const rng = sh.getRange(2, i + 1, rows, 1);
     if (TEXT_COLS.indexOf(h) !== -1) rng.setNumberFormat('@');
     if (h === 'deleted') {
-      rng.setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build());
+      // v1.2: no checkboxes on empty rows — a checkbox counts as data (FALSE), which pushed new rows below row 1000
     } else if (LISTS[h] && name !== 'Settings') {
       rng.setDataValidation(SpreadsheetApp.newDataValidation()
         .requireValueInList(LISTS[h], true).setAllowInvalid(false).build());
@@ -137,6 +138,53 @@ function formatColumns_(sh, name) {
         .setHelpText(h + ' ต้องอยู่ระหว่าง ' + NUMBER_RULES[h][0] + ' ถึง ' + NUMBER_RULES[h][1]).build());
     }
   });
+}
+
+const checkbox_ = function () { return SpreadsheetApp.newDataValidation().requireCheckbox().build(); };
+
+/**
+ * v1.2: move data rows up so they start at row 2 with no gaps, and keep checkboxes only on rows with data.
+ * Fixes sheets set up with v1.0/v1.1, where empty checkbox rows made new rows land after row 1000.
+ */
+function compactTable_(sh) {
+  const lastCol = sh.getLastColumn();
+  if (lastCol < 1) return 0;
+  const headers = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(String);
+  const width = headers.length;
+  const dCol = headers.indexOf('deleted') + 1;
+  const last = sh.getLastRow();
+  let n = 0;
+  if (last >= 2) {
+    const values = sh.getRange(2, 1, last - 1, width).getValues();
+    const keep = values.filter(function (row) { return rowHasData_(row, headers); });
+    n = keep.length;
+    const compact = values.slice(0, n).every(function (row) { return rowHasData_(row, headers); });
+    if (!compact) {
+      if (dCol) sh.getRange(2, dCol, last - 1, 1).clearDataValidations();
+      sh.getRange(2, 1, last - 1, width).clearContent();
+      if (n) {
+        const block = sh.getRange(2, 1, n, width);
+        block.setNumberFormats(keep.map(function () { return formatRow_(headers); }));
+        block.setValues(keep.map(function (row) {
+          return row.map(function (v, j) { return headers[j] === 'deleted' ? v === true : (v instanceof Date ? v.toISOString() : v); });
+        }));
+      }
+    }
+  }
+  if (dCol) {
+    const below = sh.getMaxRows() - (n + 1);
+    if (below > 0) {
+      const r = sh.getRange(n + 2, dCol, below, 1);
+      r.clearDataValidations();
+      r.clearContent();
+    }
+    if (n) sh.getRange(2, dCol, n, 1).setDataValidation(checkbox_());
+  }
+  return n;
+}
+
+function formatRow_(headers) {
+  return headers.map(function (h) { return TEXT_COLS.indexOf(h) !== -1 ? '@' : 'General'; });
 }
 
 // ---------------------------------------------------------------- HTTP
@@ -286,9 +334,10 @@ function push_(changes) {
     if (st.appends.length) {
       const start = nextRow_(st.t);
       const block = sh.getRange(start, 1, st.appends.length, width);
-      const fmtRow = st.t.headers.map(function (h) { return TEXT_COLS.indexOf(h) !== -1 ? '@' : 'General'; });
-      block.setNumberFormats(st.appends.map(function () { return fmtRow; }));
+      block.setNumberFormats(st.appends.map(function () { return formatRow_(st.t.headers); }));
       block.setValues(st.appends);
+      const dCol = st.t.headers.indexOf('deleted') + 1;
+      if (dCol) sh.getRange(start, dCol, st.appends.length, 1).setDataValidation(checkbox_());
     }
   });
 
@@ -360,6 +409,8 @@ function onEdit(e) {
         sh.getRange(rowNum, kCol).setValue(id);
       }
       sh.getRange(rowNum, uCol).setValue(stamp);
+      const dCol = headers.indexOf('deleted') + 1;
+      if (dCol && row[dCol - 1] === '') sh.getRange(rowNum, dCol).setDataValidation(checkbox_()).setValue(false);
       if (priceEdited) {
         const obj = {};
         headers.forEach(function (h, j) { obj[h] = row[j]; });
@@ -391,6 +442,8 @@ function logPrice_(ingredientId, ing, stamp) {
   });
   setTextFormats_(t.sh, t.headers, rowNum);
   t.sh.getRange(rowNum, 1, 1, values.length).setValues([values]);
+  const dCol = t.headers.indexOf('deleted') + 1;
+  if (dCol) t.sh.getRange(rowNum, dCol).setDataValidation(checkbox_());
 }
 
 // ---------------------------------------------------------------- helpers
@@ -416,9 +469,11 @@ function readTable_(name) {
   if (headers.indexOf(key) === -1) throw apiError_('bad_headers', 'แท็บ ' + name + ' ไม่มีคอลัมน์ ' + key);
   const last = sh.getLastRow();
   const rows = [];
+  let lastData = 1;
   if (last >= 2) {
     const values = sh.getRange(2, 1, last - 1, headers.length).getValues();
     values.forEach(function (v, i) {
+      if (rowHasData_(v, headers)) lastData = i + 2;
       const obj = {};
       headers.forEach(function (h, j) { if (h) obj[h] = normalize_(h, v[j]); });
       if (obj[key] === '' || obj[key] === null || obj[key] === undefined) return;
@@ -426,7 +481,7 @@ function readTable_(name) {
       rows.push(obj);
     });
   }
-  return { sh: sh, headers: headers, rows: rows, last: last };
+  return { sh: sh, headers: headers, rows: rows, last: last, lastData: lastData };
 }
 
 /** เติม id / updatedAt ให้แถวที่มีข้อมูลแต่ยังไม่มี (กรณีวางข้อมูลก่อนติดตั้ง หรือ onEdit ไม่ทำงาน) */
@@ -470,8 +525,9 @@ function findRow_(rows, key, value) {
 function nextRow_(t) {
   let maxRow = 1;
   t.rows.forEach(function (r) { if (r._row > maxRow) maxRow = r._row; });
-  const row = Math.max(maxRow, t.sh.getLastRow()) + 1;
-  t.last = row;
+  // v1.2: the next free row follows the last row with real data — not getLastRow(), which also counts empty checkboxes
+  const row = Math.max(maxRow, t.lastData || 1) + 1;
+  t.lastData = row;
   return row;
 }
 

@@ -9,6 +9,15 @@ import { getMeta, setKitchenSetting, setMeta } from '../../data/repo';
 import { clearConfig, getConfig, saveConfig, syncNow, useSync } from '../../data/sync';
 import { parseNumber } from '../../engine/format';
 
+/** Oldest Apps Script version this app works correctly with (D-07: v1.2.0 fixed rows landing after row 1000). */
+const MIN_BACKEND = [1, 2, 0];
+function isCurrentBackend(v?: string) {
+  if (!v) return false;
+  const p = v.split('.').map(Number);
+  for (let i = 0; i < 3; i++) { if ((p[i] ?? 0) !== MIN_BACKEND[i]) return (p[i] ?? 0) > MIN_BACKEND[i]; }
+  return true;
+}
+
 const GUIDE_URL = 'https://claude.ai/artifact/MxAWxvFi4K9EtFktqWFN1N';
 
 export function Settings() {
@@ -53,7 +62,7 @@ export function Settings() {
     try {
       const res = await api.ping({ url: url.trim(), token: token.trim() });
       await saveConfig(url, token);
-      setTest({ ok: true, text: res.codeVersion ? t('connOk') : `${t('connOk')} — ${t('oldBackend')}` });
+      setTest({ ok: true, text: isCurrentBackend(res.codeVersion) ? t('connOk') : `${t('connOk')} — ${t('oldBackend')}` });
       void syncNow();
     } catch (e) {
       setTest({ ok: false, text: errText(e instanceof ApiError ? e.code : 'unknown') });
