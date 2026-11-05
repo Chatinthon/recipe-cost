@@ -26,6 +26,8 @@ export const useSync = create<SyncStore>((set) => ({
 const TABLES: SyncTable[] = ['Ingredients', 'PriceHistory', 'Recipes', 'RecipeItems', 'Settings'];
 /** Overlap so edits stamped by a slightly-behind clock are not missed; applying a row twice is harmless. */
 const PULL_OVERLAP_MS = 5 * 60 * 1000;
+/** D-06: smaller requests finish well inside the timeout even on a cold Apps Script start. */
+const PUSH_BATCH = 100;
 
 export async function getConfig(): Promise<ApiConfig | null> {
   const url = await getMeta<string>('syncUrl', '');
@@ -127,7 +129,7 @@ async function pushOutbox(cfg: ApiConfig): Promise<SyncStore['conflicts']> {
   const conflicts: SyncStore['conflicts'] = [];
   // Loop: new writes may land while a batch is in flight.
   for (let round = 0; round < 20; round++) {
-    const queued: OutboxRow[] = await db.outbox.orderBy('seq').limit(400).toArray();
+    const queued: OutboxRow[] = await db.outbox.orderBy('seq').limit(PUSH_BATCH).toArray();
     if (!queued.length) break;
     const maxSeq = queued[queued.length - 1].seq!;
     const unique = new Map<string, OutboxRow>();

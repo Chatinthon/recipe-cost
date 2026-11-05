@@ -46,6 +46,7 @@ function makeRange(sheet, r, c, nr, nc) {
       return range;
     },
     setValue: (v) => { set(r, c, v); return range; },
+    setNumberFormats: (rows) => { rows.forEach((row, i) => row.forEach((f, j) => { sheet._formats[`${r + i},${c + j}`] = f; })); return range; },
     setNumberFormat: (f) => { for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) sheet._formats[`${r + i},${c + j}`] = f; return range; },
     setDataValidation: () => range,
     setFontWeight: () => range, setBackground: () => range,
@@ -255,6 +256,39 @@ test('writeSummary replaces all rows', () => {
 test('push batch limit', () => {
   const changes = Array.from({ length: 501 }, (_, i) => ({ table: 'Recipes', row: { id: 'r' + i } }));
   assert.strictEqual(post({ token, action: 'push', changes }).error, 'too_many');
+});
+
+test('v1.1 bulk push: 60 new rows + 1 update use a handful of sheet writes, text stays text', () => {
+  const sh = sheets.Ingredients;
+  const orig = sh.getRange;
+  let writes = 0;
+  sh.getRange = (...args) => {
+    const r = orig(...args);
+    const wrap = (fn) => (...a) => { writes++; return fn(...a); };
+    r.setValues = wrap(r.setValues); r.setValue = wrap(r.setValue); r.setNumberFormat = wrap(r.setNumberFormat); r.setNumberFormats = wrap(r.setNumberFormats);
+    return r;
+  };
+  const before = sh.getLastRow();
+  const changes = Array.from({ length: 60 }, (_, i) => ({ table: 'Ingredients', row: { id: 'bulk-' + i, nameTh: 'วัตถุดิบ ' + i, packPrice: i, updatedAt: '2026-11-07T00:00:00.000Z', deleted: false } }));
+  changes.push({ table: 'Ingredients', row: { id: 'ing-butter', packPrice: 150, updatedAt: '2026-11-07T00:00:00.000Z' } });
+  changes.push({ table: 'Ingredients', row: { id: 'bulk-3', nameTh: 'แก้ซ้ำในชุดเดียวกัน', updatedAt: '2026-11-07T00:00:01.000Z' } });
+  const r = post({ token, action: 'push', changes });
+  sh.getRange = orig;
+  assert.strictEqual(r.ok, true, JSON.stringify(r));
+  assert.strictEqual(r.applied.length, 62);
+  assert.strictEqual(sh.getLastRow(), before + 60, 'one row per new id, no duplicates');
+  assert.ok(writes <= 4, 'sheet writes: ' + writes);
+  const d = post({ token, action: 'pull', since: '2026-11-06T00:00:00.000Z' }).data.Ingredients;
+  assert.strictEqual(d.length, 61);
+  const b3 = d.find((x) => x.id === 'bulk-3');
+  assert.strictEqual(b3.nameTh, 'แก้ซ้ำในชุดเดียวกัน');
+  assert.strictEqual(b3.packPrice, 3, 'second change in the batch keeps fields from the first');
+  assert.strictEqual(typeof b3.updatedAt, 'string');
+  assert.strictEqual(d.find((x) => x.id === 'ing-butter').packPrice, 150);
+});
+
+test('ping reports code version so the app can tell an old deployment', () => {
+  assert.strictEqual(post({ token, action: 'ping' }).codeVersion, '1.1.0');
 });
 
 console.log(`\n${passed} tests passed`);

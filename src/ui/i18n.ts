@@ -90,11 +90,11 @@ const th = {
   // settings
   language: 'ภาษา', theme: 'ธีม', themeSystem: 'ตามระบบ', themeLight: 'สว่าง', themeDark: 'มืด', defaultFoodCost: 'food cost เริ่มต้น (%)',
   kitchenUnits: 'หน่วยครัว (ml)', tsp: '1 ช้อนชา', tbsp: '1 ช้อนโต๊ะ', cup: '1 ถ้วย', sheetConn: 'เชื่อม Google Sheet', webAppUrl: 'Web app URL', token: 'TOKEN',
-  testConn: 'ทดสอบการเชื่อม', syncNow: 'sync ตอนนี้', disconnect: 'เลิกเชื่อม', connOk: 'เชื่อมสำเร็จ', lastSync: 'sync ล่าสุด {t}', pendingN: 'รอส่ง {n} รายการ',
+  testConn: 'ทดสอบการเชื่อม', syncNow: 'sync ตอนนี้', disconnect: 'เลิกเชื่อม', connOk: 'เชื่อมสำเร็จ', lastSync: 'sync สำเร็จล่าสุด {t}', lastAttemptFailed: 'ส่งข้อมูลครั้งล่าสุดไม่สำเร็จ', oldBackend: 'โค้ด Apps Script เป็นเวอร์ชันเก่า กรุณาอัปเดตเป็น v1.1.0 ตามคู่มือ', pendingN: 'รอส่ง {n} รายการ',
   sheetGuide: 'ยังไม่มี? ดูคู่มือตั้งค่า Google Sheet + Apps Script', usdaKey: 'USDA API key', usdaKeyHint: 'สมัครฟรีที่ fdc.nal.usda.gov/api-key-signup',
   previewNote: 'นี่คือเวอร์ชันตัวอย่างบน claude.ai: ข้อมูลเก็บในเครื่องนี้เท่านั้น เชื่อม Google Sheet และค้นหา USDA ได้ในเวอร์ชันที่ติดตั้งจาก GitHub Pages', dataSection: 'ข้อมูล', exportJson: 'Export JSON', about: 'เกี่ยวกับ', version: 'เวอร์ชัน',
   err_unauthorized: 'TOKEN ไม่ถูกต้อง', err_not_setup: 'ยังไม่ได้รัน setup() ใน Apps Script', err_bad_url: 'URL ต้องขึ้นต้นด้วย https://script.google.com/',
-  err_not_json: 'Web app ไม่ได้ตอบเป็น JSON — ตรวจว่า Who has access = Anyone', err_network: 'ต่ออินเทอร์เน็ตไม่ได้', err_timeout: 'Google ตอบช้าเกินไป ลองใหม่',
+  err_not_json: 'Web app ไม่ได้ตอบเป็น JSON — ตรวจว่า Who has access = Anyone', err_network: 'ต่ออินเทอร์เน็ตไม่ได้', err_timeout: 'Google ตอบช้าเกินไป แอปจะลองส่งใหม่เอง หรือกด sync ตอนนี้',
   err_busy: 'มีการเขียนข้อมูลอยู่ ลองใหม่อีกครั้ง', err_unknown: 'เกิดข้อผิดพลาด',
   // validation
   v_required: 'ต้องกรอก', v_min0: 'ต้องไม่ติดลบ', v_gt0: 'ต้องมากกว่า 0', v_min1: 'ต้องอย่างน้อย 1', v_range1_100: 'ต้องอยู่ระหว่าง 1–100',
@@ -158,7 +158,7 @@ const en: Dict = {
   conflictMsg: '{n} items were replaced by newer values from Google Sheet', pullToRefresh: 'Pull to sync', releaseToRefresh: 'Release to sync',
   language: 'Language', theme: 'Theme', themeSystem: 'System', themeLight: 'Light', themeDark: 'Dark', defaultFoodCost: 'Default food cost (%)',
   kitchenUnits: 'Kitchen units (ml)', tsp: '1 tsp', tbsp: '1 tbsp', cup: '1 cup', sheetConn: 'Google Sheet connection', webAppUrl: 'Web app URL', token: 'TOKEN',
-  testConn: 'Test connection', syncNow: 'Sync now', disconnect: 'Disconnect', connOk: 'Connected', lastSync: 'Last sync {t}', pendingN: '{n} waiting to send',
+  testConn: 'Test connection', syncNow: 'Sync now', disconnect: 'Disconnect', connOk: 'Connected', lastSync: 'Last successful sync {t}', lastAttemptFailed: 'Last sync attempt failed', oldBackend: 'Apps Script code is an old version — please update to v1.1.0 (see the guide)', pendingN: '{n} waiting to send',
   sheetGuide: 'Not set up yet? See the Google Sheet + Apps Script guide', usdaKey: 'USDA API key', usdaKeyHint: 'Free at fdc.nal.usda.gov/api-key-signup',
   previewNote: 'This is the claude.ai preview: data stays on this device. Google Sheet sync and USDA search work in the version installed from GitHub Pages.', dataSection: 'Data', exportJson: 'Export JSON', about: 'About', version: 'Version',
   err_unauthorized: 'Wrong TOKEN', err_not_setup: 'setup() has not been run in Apps Script', err_bad_url: 'URL must start with https://script.google.com/',

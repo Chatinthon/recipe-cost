@@ -46,6 +46,7 @@ function makeRange(sheet, r, c, nr, nc) {
       return range;
     },
     setValue: (v) => { set(r, c, v); return range; },
+    setNumberFormats: (rows) => { rows.forEach((row, i) => row.forEach((f, j) => { sheet._formats[`${r + i},${c + j}`] = f; })); return range; },
     setNumberFormat: (f) => { for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) sheet._formats[`${r + i},${c + j}`] = f; return range; },
     setDataValidation: () => range,
     setFontWeight: () => range, setBackground: () => range,

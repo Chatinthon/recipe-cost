@@ -51,9 +51,9 @@ export function Settings() {
   const connect = async () => {
     setTest(null);
     try {
-      await api.ping({ url: url.trim(), token: token.trim() });
+      const res = await api.ping({ url: url.trim(), token: token.trim() });
       await saveConfig(url, token);
-      setTest({ ok: true, text: t('connOk') });
+      setTest({ ok: true, text: res.codeVersion ? t('connOk') : `${t('connOk')} — ${t('oldBackend')}` });
       void syncNow();
     } catch (e) {
       setTest({ ok: false, text: errText(e instanceof ApiError ? e.code : 'unknown') });
@@ -123,7 +123,7 @@ export function Settings() {
               <button className="btn outline sm" onClick={async () => { await clearConfig(); setUrl(''); setToken(''); setTest(null); }}>{t('disconnect')}</button>
             </div>
           )}
-          {sync.state === 'error' && sync.lastError && <div className="status-line err">{errText(sync.lastError)}</div>}
+          {sync.lastError && sync.state !== 'syncing' && <div className="status-line err" role="status" data-testid="sync-error">{t('lastAttemptFailed')}: {errText(sync.lastError)}</div>}
           <a href={GUIDE_URL} target="_blank" rel="noreferrer" className="small">{t('sheetGuide')}</a>
         </div>
 

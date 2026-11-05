@@ -185,3 +185,28 @@ describe('D-02 regression: quick consecutive field edits', () => {
     expect([got.batchExtraCost, got.perServeExtraCost, got.targetFoodCostPct]).toEqual([800, 300, 40]);
   });
 });
+
+describe('D-06 regression: large first sync', () => {
+  it('sends in batches of at most 100 and every row reaches the Sheet', async () => {
+    const sizes: number[] = [];
+    setTransport(async (_url, body) => {
+      const b = JSON.parse(body);
+      if (b.action === 'push') sizes.push(b.changes.length);
+      return server.post(body);
+    });
+    for (let i = 0; i < 120; i++) await repo.saveIngredient({ ...butter(), nameTh: `วัตถุดิบ ${i}` });
+    await syncNow();
+    expect(useSync.getState().pending).toBe(0);
+    expect(Math.max(...sizes)).toBeLessThanOrEqual(100);
+    expect(sizes.reduce((a, b) => a + b, 0)).toBe(240); // 120 ingredients + 120 price history rows
+    expect(server.sheets.Ingredients.getLastRow()).toBe(121);
+  });
+
+  it('a timeout keeps the queue and records the reason for the settings screen', async () => {
+    setTransport(async () => { throw Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }); });
+    await repo.saveIngredient(butter());
+    await syncNow();
+    expect(useSync.getState().lastError).toBe('timeout');
+    expect(useSync.getState().pending).toBe(2);
+  });
+});

@@ -1,6 +1,6 @@
 /**
  * Recipe Cost & Nutrition — Google Sheet backend (Google Apps Script)
- * Version 1.0.0
+ * Version 1.1.0
  *
  * วิธีติดตั้ง: ดูคู่มือ "ตั้งค่า Google Sheet + Apps Script"
  *   1) วางโค้ดนี้ใน Extensions > Apps Script ของ Google Sheet ที่สร้างใหม่
@@ -17,6 +17,7 @@
  */
 
 const API_VERSION = 1;
+const CODE_VERSION = '1.1.0';
 
 const TABLES = {
   Ingredients: ['id', 'nameTh', 'nameEn', 'category', 'baseUnit', 'packPrice', 'packSize', 'packUnit', 'buyMode',
@@ -142,7 +143,7 @@ function formatColumns_(sh, name) {
 
 function doGet() {
   return handle_(function () {
-    return { ok: true, apiVersion: API_VERSION, serverTime: now_() };
+    return { ok: true, apiVersion: API_VERSION, codeVersion: CODE_VERSION, serverTime: now_() };
   });
 }
 
@@ -156,7 +157,7 @@ function doPost(e) {
     }
     auth_(body.token);
     const action = body.action || 'ping';
-    if (action === 'ping') return { ok: true, apiVersion: API_VERSION, serverTime: now_() };
+    if (action === 'ping') return { ok: true, apiVersion: API_VERSION, codeVersion: CODE_VERSION, serverTime: now_() };
 
     const lock = LockService.getScriptLock();
     if (!lock.tryLock(20000)) throw apiError_('busy', 'มีการเขียนข้อมูลอยู่ ลองใหม่อีกครั้ง');
@@ -214,6 +215,9 @@ function pull_(since) {
 /**
  * รับการเปลี่ยนแปลงจากแอป: upsert ตาม key
  * ถ้าแถวใน Sheet ใหม่กว่า (updatedAt มากกว่า) จะไม่เขียนทับ และส่งแถวนั้นกลับใน conflicts
+ *
+ * v1.1: แถวใหม่ของแต่ละแท็บเขียนลง Sheet ทีเดียวทั้งก้อน (ตั้ง format + เขียนค่า = 2 คำสั่งต่อแท็บ)
+ * เดิมเขียนทีละช่อง ทำให้ข้อมูลชุดแรกหลายสิบแถวช้าจนแอปรอไม่ไหว
  */
 function push_(changes) {
   if (!Array.isArray(changes)) throw apiError_('bad_changes', 'changes ต้องเป็น array');
@@ -222,6 +226,16 @@ function push_(changes) {
   const applied = [];
   const conflicts = [];
 
+  const open = function (name) {
+    if (tables[name]) return tables[name];
+    const t = readTable_(name);
+    const key = keyOf_(name);
+    const index = {};
+    t.rows.forEach(function (r) { index[String(r[key])] = r; });
+    tables[name] = { t: t, key: key, index: index, updates: {}, appends: [] };
+    return tables[name];
+  };
+
   changes.forEach(function (c, idx) {
     if (!c || SYNC_TABLES.indexOf(c.table) === -1) throw apiError_('bad_table', 'รายการที่ ' + idx + ': table ไม่ถูกต้อง');
     const key = keyOf_(c.table);
@@ -229,31 +243,53 @@ function push_(changes) {
     if (row[key] === undefined || row[key] === null || row[key] === '') {
       throw apiError_('missing_key', 'รายการที่ ' + idx + ': ไม่มี ' + key);
     }
-    const t = tables[c.table] || (tables[c.table] = readTable_(c.table));
+    const st = open(c.table);
+    const headers = st.t.headers;
     if (!row.updatedAt) row.updatedAt = now_();
-    const existing = findRow_(t.rows, key, row[key]);
+    const k = String(row[key]);
+    const existing = st.index[k] || null;
 
     if (existing && String(existing.updatedAt || '') > String(row.updatedAt)) {
       conflicts.push({ table: c.table, row: strip_(existing) });
       return;
     }
 
-    const values = t.headers.map(function (h) {
+    const values = headers.map(function (h) {
       if (!h) return '';
       if (Object.prototype.hasOwnProperty.call(row, h)) return toCell_(h, row[h]);
       return existing ? toCell_(h, existing[h]) : (h === 'deleted' ? false : '');
     });
-
-    const rowNum = existing ? existing._row : nextRow_(t);
-    const target = t.sh.getRange(rowNum, 1, 1, values.length);
-    setTextFormats_(t.sh, t.headers, rowNum);
-    target.setValues([values]);
-
     const merged = {};
-    t.headers.forEach(function (h, i) { if (h) merged[h] = values[i]; });
-    merged._row = rowNum;
-    if (existing) Object.assign(existing, merged); else t.rows.push(merged);
-    applied.push({ table: c.table, key: String(row[key]), updatedAt: String(row.updatedAt) });
+    headers.forEach(function (h, i) { if (h) merged[h] = values[i]; });
+
+    if (existing && existing._row) {
+      st.updates[existing._row] = values;
+      merged._row = existing._row;
+    } else if (existing && existing._append !== undefined) {
+      st.appends[existing._append] = values;
+      merged._append = existing._append;
+    } else {
+      merged._append = st.appends.length;
+      st.appends.push(values);
+    }
+    st.index[k] = merged;
+    applied.push({ table: c.table, key: k, updatedAt: String(row.updatedAt) });
+  });
+
+  Object.keys(tables).forEach(function (name) {
+    const st = tables[name];
+    const sh = st.t.sh;
+    const width = st.t.headers.length;
+    Object.keys(st.updates).forEach(function (r) {
+      sh.getRange(Number(r), 1, 1, width).setValues([st.updates[r]]);
+    });
+    if (st.appends.length) {
+      const start = nextRow_(st.t);
+      const block = sh.getRange(start, 1, st.appends.length, width);
+      const fmtRow = st.t.headers.map(function (h) { return TEXT_COLS.indexOf(h) !== -1 ? '@' : 'General'; });
+      block.setNumberFormats(st.appends.map(function () { return fmtRow; }));
+      block.setValues(st.appends);
+    }
   });
 
   return { ok: true, serverTime: now_(), applied: applied, conflicts: conflicts };

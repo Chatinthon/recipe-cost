@@ -61,9 +61,12 @@ async function call<T>(cfg: ApiConfig, payload: Record<string, unknown>, timeout
   }
 }
 
+/** D-06: Apps Script cold start + Sheet writes can take tens of seconds; the platform limit is 6 minutes. */
+const SLOW_MS = 90_000;
+
 export const api = {
-  ping: (cfg: ApiConfig) => call<{ ok: true; apiVersion: number; serverTime: string }>(cfg, { action: 'ping' }, 15000),
-  pull: (cfg: ApiConfig, since?: string) => call<PullResponse>(cfg, { action: 'pull', since }),
-  push: (cfg: ApiConfig, changes: { table: SyncTable; row: SheetRow }[]) => call<PushResponse>(cfg, { action: 'push', changes }),
-  writeSummary: (cfg: ApiConfig, rows: Record<string, unknown>[]) => call<{ ok: true; written: number }>(cfg, { action: 'writeSummary', rows }),
+  ping: (cfg: ApiConfig) => call<{ ok: true; apiVersion: number; codeVersion?: string; serverTime: string }>(cfg, { action: 'ping' }, 30000),
+  pull: (cfg: ApiConfig, since?: string) => call<PullResponse>(cfg, { action: 'pull', since }, SLOW_MS),
+  push: (cfg: ApiConfig, changes: { table: SyncTable; row: SheetRow }[]) => call<PushResponse>(cfg, { action: 'push', changes }, SLOW_MS),
+  writeSummary: (cfg: ApiConfig, rows: Record<string, unknown>[]) => call<{ ok: true; written: number }>(cfg, { action: 'writeSummary', rows }, SLOW_MS),
 };
