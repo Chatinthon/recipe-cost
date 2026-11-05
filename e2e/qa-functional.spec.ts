@@ -181,9 +181,14 @@ test.describe('Nutrition sources (Q3)', () => {
 
   test('TC-13 starter import looks up USDA, then imports the reviewed items', async ({ page }) => {
     let calls = 0;
+    let beefDown = true;
+    const raw: string[] = [];
     await page.route('https://api.nal.usda.gov/**', async (route) => {
       calls++;
+      raw.push(new URL(route.request().url()).search);
       const q = new URL(route.request().url()).searchParams.get('query') ?? '';
+      // D-05: one item fails (like the real gateway did) — the rest must still be looked up
+      if (q.startsWith('Beef') && beefDown) return route.abort('failed');
       const foods = q === 'Honey' ? [] : [{ fdcId: 1000 + calls, description: q, dataType: 'SR Legacy', foodNutrients: [
         { nutrientNumber: '208', unitName: 'KCAL', value: 100 }, { nutrientNumber: '203', unitName: 'G', value: 1 },
         { nutrientNumber: '204', unitName: 'G', value: 1 }, { nutrientNumber: '205', unitName: 'G', value: 20 },
@@ -195,8 +200,16 @@ test.describe('Nutrition sources (Q3)', () => {
     await page.getByTestId('usda-key').blur();
     await page.goto('/#/starter');
     await page.getByTestId('starter-fetch').click();
+    await expect(page.getByTestId('starter-import')).toHaveText('นำเข้า 57 รายการ', { timeout: 60000 });
+    await expect(page.getByText('ไม่พบ', { exact: true })).toBeVisible();
+    await expect(page.getByText('ค้นไม่สำเร็จ 1 รายการ')).toBeVisible();
+    expect(raw.some((s) => /%2F|%25/i.test(s))).toBe(false);
+    // retry only the failed one
+    beefDown = false;
+    const before = calls;
+    await page.getByTestId('starter-fetch').click();
     await expect(page.getByTestId('starter-import')).toHaveText('นำเข้า 58 รายการ', { timeout: 30000 });
-    await expect(page.getByText('ไม่พบ')).toBeVisible();
+    expect(calls - before).toBe(1); // only the failed item is looked up again
     await page.getByRole('checkbox', { name: 'เกลือ' }).uncheck();
     await expect(page.getByTestId('starter-import')).toHaveText('นำเข้า 57 รายการ');
     await page.getByTestId('starter-import').click();

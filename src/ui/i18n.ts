@@ -83,7 +83,7 @@ const th = {
   includeBranded: 'รวมสินค้ายี่ห้อ', useThis: 'ใช้ค่านี้', partialData: 'ข้อมูลไม่ครบ', usdaAttribution: 'ข้อมูลจาก USDA FoodData Central',
   // starter
   starterTitle: 'ชุดวัตถุดิบตั้งต้น', starterIntro: 'ค้นค่าโภชนาการจาก USDA ให้ {n} รายการ ตรวจชื่อที่ USDA จับคู่ได้ แล้วเลือกเฉพาะที่ต้องการ ราคายังต้องใส่เอง',
-  starterFetch: 'ค้นค่าจาก USDA', starterFetching: 'กำลังค้น {i}/{n}', starterImport: 'นำเข้า {n} รายการ', starterDone: 'นำเข้า {n} รายการแล้ว', alreadyHave: 'มีแล้ว', notFound: 'ไม่พบ',
+  starterFetch: 'ค้นค่าจาก USDA', starterFetching: 'กำลังค้น {i}/{n}', starterImport: 'นำเข้า {n} รายการ', starterDone: 'นำเข้า {n} รายการแล้ว', alreadyHave: 'มีแล้ว', notFound: 'ไม่พบ', starterItemFailed: 'ค้นไม่สำเร็จ — กด "ค้นค่าจาก USDA" อีกครั้งเพื่อลองใหม่', starterSomeFailed: 'ค้นไม่สำเร็จ {n} รายการ กด "ค้นค่าจาก USDA" อีกครั้งเพื่อลองเฉพาะรายการนั้น ส่วนที่ค้นได้แล้วนำเข้าได้เลย',
   // sync
   synced: 'sync แล้ว', syncing: 'กำลัง sync', pendingSync: 'รอ sync {n}', offline: 'ออฟไลน์', syncError: 'sync ไม่สำเร็จ', notConnected: 'ยังไม่เชื่อม Sheet',
   conflictMsg: '{n} รายการถูกแทนที่ด้วยค่าที่ใหม่กว่าจาก Google Sheet', pullToRefresh: 'ดึงลงเพื่อ sync', releaseToRefresh: 'ปล่อยเพื่อ sync',
@@ -153,7 +153,7 @@ const en: Dict = {
   usdaBadKey: 'Invalid API key', usdaRate: 'Rate limit reached, try again in an hour', usdaNetwork: 'No internet connection', usdaNoResult: 'No results',
   includeBranded: 'Include branded', useThis: 'Use this', partialData: 'Incomplete data', usdaAttribution: 'Data: USDA FoodData Central',
   starterTitle: 'Starter ingredients', starterIntro: 'Looks up {n} items in USDA. Check each match and keep the ones you want. Prices are still yours to enter.',
-  starterFetch: 'Look up in USDA', starterFetching: 'Looking up {i}/{n}', starterImport: 'Import {n} items', starterDone: 'Imported {n} items', alreadyHave: 'Already added', notFound: 'Not found',
+  starterFetch: 'Look up in USDA', starterFetching: 'Looking up {i}/{n}', starterImport: 'Import {n} items', starterDone: 'Imported {n} items', alreadyHave: 'Already added', notFound: 'Not found', starterItemFailed: 'Lookup failed — tap "Look up in USDA" again to retry', starterSomeFailed: '{n} lookups failed. Tap "Look up in USDA" again to retry only those; the rest can be imported now.',
   synced: 'Synced', syncing: 'Syncing', pendingSync: '{n} to sync', offline: 'Offline', syncError: 'Sync failed', notConnected: 'Sheet not connected',
   conflictMsg: '{n} items were replaced by newer values from Google Sheet', pullToRefresh: 'Pull to sync', releaseToRefresh: 'Release to sync',
   language: 'Language', theme: 'Theme', themeSystem: 'System', themeLight: 'Light', themeDark: 'Dark', defaultFoodCost: 'Default food cost (%)',

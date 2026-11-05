@@ -7,7 +7,9 @@ import { STARTER, type StarterItem } from '../../usda/starter';
 import { bestMatch, searchUsda, UsdaError, usdaSourceLabel, type UsdaFood } from '../../usda/usda';
 import { getMeta, saveIngredient } from '../../data/repo';
 
-type Row = { item: StarterItem; match: UsdaFood | null; status: 'idle' | 'ok' | 'notfound'; selected: boolean };
+type Row = { item: StarterItem; match: UsdaFood | null; status: 'idle' | 'ok' | 'notfound' | 'error'; selected: boolean };
+
+const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Q3 option 1: starter ingredients, values looked up live from USDA and reviewed before import. */
 export function StarterImport() {
@@ -25,20 +27,35 @@ export function StarterImport() {
   const fetchAll = async () => {
     if (!key) return;
     setError(null);
-    const todo = rows.filter((r) => r.status === 'idle' && !have.has(r.item.nameTh));
+    // D-05: one failing item must not stop the whole lookup; failed items can be retried with the same button.
+    const todo = rows.filter((r) => (r.status === 'idle' || r.status === 'error') && !have.has(r.item.nameTh));
+    let failed = 0;
     for (let i = 0; i < todo.length; i++) {
       setProgress({ i: i + 1, n: todo.length });
-      try {
-        const foods = await searchUsda(todo[i].item.query, key, { pageSize: 5 });
-        const m = bestMatch(todo[i].item.query, foods);
-        setRows((rs) => rs.map((r) => (r.item.key === todo[i].item.key ? { ...r, match: m, status: m ? 'ok' : 'notfound', selected: !!m } : r)));
-      } catch (e) {
-        const code = e instanceof UsdaError ? e.code : 'network';
-        setError(code === 'bad_key' ? t('usdaBadKey') : code === 'rate_limited' ? t('usdaRate') : t('usdaNetwork'));
-        break;
+      const row = todo[i];
+      const setRow = (p: Partial<Row>) => setRows((rs) => rs.map((r) => (r.item.key === row.item.key ? { ...r, ...p } : r)));
+      let done = false;
+      for (let attempt = 0; attempt < 2 && !done; attempt++) {
+        try {
+          const foods = await searchUsda(row.item.query, key, { pageSize: 5 });
+          const m = bestMatch(row.item.query, foods);
+          setRow({ match: m, status: m ? 'ok' : 'notfound', selected: !!m });
+          done = true;
+        } catch (e) {
+          const code = e instanceof UsdaError ? e.code : 'network';
+          if (code === 'bad_key' || code === 'rate_limited') {
+            setError(code === 'bad_key' ? t('usdaBadKey') : t('usdaRate'));
+            setProgress(null);
+            return;
+          }
+          if (attempt === 0) await pause(800);
+        }
       }
+      if (!done) { failed++; setRow({ status: 'error', selected: false }); }
+      await pause(120); // stay gentle with the API
     }
     setProgress(null);
+    if (failed) setError(t('starterSomeFailed', { n: failed }));
   };
 
   const ready = rows.filter((r) => r.status === 'ok' && r.selected && !have.has(r.item.nameTh));
@@ -78,7 +95,7 @@ export function StarterImport() {
                 <div className="grow" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <span className="name">{lang === 'en' ? r.item.nameEn : r.item.nameTh}</span>
                   <span className="small muted" lang="en">
-                    {owned ? t('alreadyHave') : r.status === 'ok' ? `${r.match!.description} · ${Math.round(r.match!.nutrition.kcal)} kcal` : r.status === 'notfound' ? t('notFound') : r.item.query}
+                    {owned ? t('alreadyHave') : r.status === 'ok' ? `${r.match!.description} · ${Math.round(r.match!.nutrition.kcal)} kcal` : r.status === 'notfound' ? t('notFound') : r.status === 'error' ? t('starterItemFailed') : r.item.query}
                   </span>
                 </div>
               </li>

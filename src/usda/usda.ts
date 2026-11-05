@@ -47,6 +47,14 @@ export function normalizeFood(f: RawFood): UsdaFood {
   };
 }
 
+/**
+ * D-05: the API gateway rejects some characters in the query (an encoded "/" or "%", e.g. "85% lean meat / 15% fat"),
+ * which the browser reports as a network error. Search is word-based, so these characters can be dropped safely.
+ */
+export function searchText(query: string): string {
+  return query.replace(/[/%\\?#&=+]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 export class UsdaError extends Error {
   code: 'no_key' | 'bad_key' | 'rate_limited' | 'network' | 'http';
   constructor(code: UsdaError['code'], message: string = code) {
@@ -58,7 +66,7 @@ export class UsdaError extends Error {
 export async function searchUsda(query: string, apiKey: string, opts: { pageSize?: number; branded?: boolean; signal?: AbortSignal } = {}): Promise<UsdaFood[]> {
   if (!apiKey) throw new UsdaError('no_key');
   const dataTypes = opts.branded ? ['Foundation', 'SR Legacy', 'Branded'] : ['Foundation', 'SR Legacy'];
-  const params = new URLSearchParams({ query, pageSize: String(opts.pageSize ?? 15), api_key: apiKey });
+  const params = new URLSearchParams({ query: searchText(query), pageSize: String(opts.pageSize ?? 15), api_key: apiKey });
   dataTypes.forEach((d) => params.append('dataType', d));
   let res: Response;
   try {
